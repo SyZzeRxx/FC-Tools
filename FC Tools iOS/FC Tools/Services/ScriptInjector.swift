@@ -18,6 +18,7 @@ struct ScriptInjector {
     static let marker = "__fcToolsFodderInjected"
     static let updateURL = URL(string: "https://fodder.gg/fodder.user.js")!
 
+
     func source() throws -> String {
         if let updated = try? String(contentsOf: ScriptUpdateService.cachedScriptURL, encoding: .utf8),
            ScriptUpdateService.isValid(updated) {
