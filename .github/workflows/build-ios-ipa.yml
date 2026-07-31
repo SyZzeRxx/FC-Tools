@@ -1,0 +1,59 @@
+name: Build FC Tools iOS IPA
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned IPA
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Unpack source archive when uploaded through the web UI
+        run: |
+          set -euo pipefail
+          if [ -f "FC-Tools-iOS-Source.zip" ]; then
+            /usr/bin/unzip -q -o "FC-Tools-iOS-Source.zip"
+          fi
+
+      - name: Build iPhone application
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project "FC Tools iOS/FC Tools.xcodeproj" \
+            -scheme "FC Tools" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/FCToolsDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            clean build
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="$RUNNER_TEMP/FCToolsDerivedData/Build/Products/Release-iphoneos/FC Tools.app"
+          test -d "$APP_PATH"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/FC-Tools-unsigned.ipa" Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: FC-Tools-unsigned-IPA
+          path: FC-Tools-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
