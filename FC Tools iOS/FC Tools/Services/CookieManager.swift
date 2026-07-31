@@ -1,6 +1,7 @@
 import Foundation
 import WebKit
 
+@MainActor
 struct CookieManager {
     func clearWebsiteData() async throws {
         let store = WKWebsiteDataStore.default()
@@ -8,4 +9,3 @@ struct CookieManager {
         await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: records)
     }
 }
-

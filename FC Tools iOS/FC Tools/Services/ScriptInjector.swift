@@ -55,6 +55,7 @@ struct ScriptInjector {
         """
     }
 
+    @MainActor
     func install(into controller: WKUserContentController) throws {
         controller.removeAllUserScripts()
         guard SettingsManager.shared.scriptInjectionEnabled else { return }
