@@ -36,6 +36,7 @@ final class WebViewManager: NSObject, ObservableObject {
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.refreshControl = makeRefreshControl()
         observeWebView()
@@ -136,6 +137,40 @@ final class WebViewManager: NSObject, ObservableObject {
         } catch { report(error, context: "Clearing website data") }
     }
 
+    func fillSavedLogin() {
+        guard SettingsManager.shared.quickLoginEnabled,
+              let credentials = KeychainManager().read() else { return }
+        guard let emailData = try? JSONEncoder().encode(credentials.email),
+              let passwordData = try? JSONEncoder().encode(credentials.password),
+              let email = String(data: emailData, encoding: .utf8),
+              let password = String(data: passwordData, encoding: .utf8) else { return }
+        let source = """
+        (() => {
+          const email = (email), password = (password);
+          const setValue = (element, value) => {
+            if (!element || element.value) return false;
+            const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
+            if (setter) setter.call(element, value); else element.value = value;
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+            return true;
+          };
+          const fill = () => {
+            const emailInput = document.querySelector('input[type="email"],input[name="email"],input[name="username"],input[autocomplete="username"]');
+            const passwordInput = document.querySelector('input[type="password"],input[name="password"],input[autocomplete="current-password"]');
+            return setValue(emailInput, email) || setValue(passwordInput, password);
+          };
+          fill();
+          let attempts = 0;
+          const timer = setInterval(() => { if (fill() || ++attempts >= 40) clearInterval(timer); }, 500);
+        })();
+        """
+        webView.evaluateJavaScript(source) { _, error in
+            if let error { AppLogger.shared.log("iOS account autofill failed: \(error.localizedDescription)", level: .warning) }
+            else { AppLogger.shared.log("Saved account fields filled; sign-in was not submitted.") }
+        }
+    }
+
     private func report(_ error: Error, context: String) {
         let message = "\(context): \(error.localizedDescription)"
         lastError = message
@@ -152,6 +187,7 @@ extension WebViewManager: WKNavigationDelegate {
         isLoading = false
         webView.scrollView.refreshControl?.endRefreshing()
         injectScript()
+        fillSavedLogin()
     }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         isLoading = false

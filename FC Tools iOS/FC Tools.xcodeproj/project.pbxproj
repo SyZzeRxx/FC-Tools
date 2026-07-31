@@ -41,8 +41,8 @@
 		A10000000000000000000009 /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A10000000000000000000010 /* Project config */ = { isa = XCConfigurationList; buildConfigurations = (A10000000000000000000012, A10000000000000000000013); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		A10000000000000000000011 /* Target config */ = { isa = XCConfigurationList; buildConfigurations = (A10000000000000000000014, A10000000000000000000015); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		A10000000000000000000012 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
-		A10000000000000000000013 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
+		A10000000000000000000012 /* Debug */ = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_STRICT_CONCURRENCY = minimal; SWIFT_VERSION = 5.0; }; name = Debug; };
+		A10000000000000000000013 /* Release */ = { isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; GCC_C_LANGUAGE_STANDARD = gnu17; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_STRICT_CONCURRENCY = minimal; SWIFT_VERSION = 5.0; VALIDATE_PRODUCT = YES; }; name = Release; };
 		A10000000000000000000014 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -60,6 +60,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -81,6 +82,7 @@
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

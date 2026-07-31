@@ -1,10 +1,12 @@
 import SwiftUI
 
-@MainActor
 final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
     @AppStorage("scriptInjectionEnabled") var scriptInjectionEnabled = true {
+        willSet { objectWillChange.send() }
+    }
+    @AppStorage("quickLoginEnabled") var quickLoginEnabled = false {
         willSet { objectWillChange.send() }
     }
     @AppStorage("appearance") var appearance = "system" {
@@ -17,4 +19,3 @@ final class SettingsManager: ObservableObject {
 
     private init() {}
 }
-
