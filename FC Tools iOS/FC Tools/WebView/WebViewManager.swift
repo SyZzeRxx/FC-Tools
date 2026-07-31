@@ -37,7 +37,7 @@ final class WebViewManager: NSObject, ObservableObject {
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
-        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.refreshControl = makeRefreshControl()
         observeWebView()
