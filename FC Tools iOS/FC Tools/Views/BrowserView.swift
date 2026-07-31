@@ -6,33 +6,26 @@ struct BrowserView: View {
     @State private var showingShare = false
 
     var body: some View {
-        ZStack {
-            WebViewContainer(manager: manager)
-                .ignoresSafeArea()
+        VStack(spacing: 0) {
+            appHeader
+            ZStack(alignment: .top) {
+                WebViewContainer(manager: manager)
+                    .ignoresSafeArea(edges: .bottom)
 
-            VStack(spacing: 0) {
-                topChrome
-                Spacer()
-                bottomChrome
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .ignoresSafeArea(edges: .vertical)
-
-            if manager.isLoading {
-                VStack {
+                if manager.isLoading {
                     ProgressView(value: manager.progress)
+                        .progressViewStyle(.linear)
                         .tint(.green)
-                        .frame(width: 150)
-                        .padding(.top, 4)
-                    Spacer()
                 }
-            }
-            if let error = manager.lastError {
-                ContentUnavailableView("Couldn’t Load Page", systemImage: "wifi.exclamationmark",
-                                       description: Text(error))
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-                    .padding(24)
+
+                if let error = manager.lastError {
+                    ContentUnavailableView(
+                        "Couldn’t Connect",
+                        systemImage: "wifi.exclamationmark",
+                        description: Text(error)
+                    )
+                    .background(.regularMaterial)
+                }
             }
         }
         .background(.black)
@@ -44,52 +37,61 @@ struct BrowserView: View {
         }
     }
 
-    private var topChrome: some View {
-        HStack(spacing: 10) {
+    private var appHeader: some View {
+        HStack(spacing: 8) {
+            Button(action: manager.goBack) {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(!manager.canGoBack)
+
+            Button(action: manager.goForward) {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!manager.canGoForward)
+
             HStack(spacing: 8) {
                 Image(systemName: "sportscourt.fill")
-                    .font(.caption.bold()).foregroundStyle(.black)
+                    .font(.caption.bold())
+                    .foregroundStyle(.black)
                     .frame(width: 28, height: 28)
                     .background(.green, in: RoundedRectangle(cornerRadius: 9))
-                Text("FC TOOLS").font(.caption.bold()).tracking(1.2)
-                Circle().fill(.green).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("FC TOOLS").font(.caption.bold()).tracking(1)
+                    Text("ULTIMATE TEAM").font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(.black.opacity(0.72), in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.13)))
+            .accessibilityElement(children: .combine)
+
             Spacer()
+
+            Button(action: manager.reload) {
+                Image(systemName: "arrow.clockwise")
+            }
+            Button { showingShare = true } label: {
+                Image(systemName: "square.and.arrow.up")
+            }
             Button { showingSettings = true } label: {
                 Image(systemName: "gearshape.fill")
-                    .frame(width: 36, height: 36)
             }
-            .buttonStyle(ChromeButtonStyle())
         }
-    }
-
-    private var bottomChrome: some View {
-        HStack(spacing: 8) {
-            Button(action: manager.goBack) { Image(systemName: "chevron.left") }
-                .disabled(!manager.canGoBack)
-            Button(action: manager.goForward) { Image(systemName: "chevron.right") }
-                .disabled(!manager.canGoForward)
-            Spacer()
-            Button(action: manager.reload) { Image(systemName: "arrow.clockwise") }
-            Button { showingShare = true } label: { Image(systemName: "square.and.arrow.up") }
+        .buttonStyle(HeaderButtonStyle())
+        .padding(.horizontal, 10)
+        .frame(height: 52)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(.green.opacity(0.55)).frame(height: 1)
         }
-        .padding(8)
-        .background(.black.opacity(0.72), in: Capsule())
-        .overlay(Capsule().stroke(.white.opacity(0.13)))
-        .buttonStyle(ChromeButtonStyle())
     }
 }
 
-private struct ChromeButtonStyle: ButtonStyle {
+private struct HeaderButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white)
-            .frame(width: 36, height: 30)
-            .background(configuration.isPressed ? .green.opacity(0.35) : .white.opacity(0.10), in: Capsule())
-            .opacity(configuration.isPressed ? 0.75 : 1)
+            .foregroundStyle(.primary)
+            .frame(width: 32, height: 32)
+            .background(configuration.isPressed ? .green.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 9))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

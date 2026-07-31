@@ -14,6 +14,9 @@ struct SettingsView: View {
             Form {
                 Section("Account autofill") {
                     Toggle("Enable account autofill", isOn: $settings.quickLoginEnabled)
+                        .onChange(of: settings.quickLoginEnabled) { _, _ in
+                            manager.reconfigureAutofill(reload: false)
+                        }
                     TextField("EA email", text: $accountEmail)
                         .textContentType(.username).textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
@@ -25,6 +28,9 @@ struct SettingsView: View {
                     Button("Remove saved account", systemImage: "trash", role: .destructive) {
                         KeychainManager().delete()
                         settings.quickLoginEnabled = false
+                        accountEmail = ""
+                        accountPassword = ""
+                        manager.reconfigureAutofill(reload: false)
                     }
                 }
                 Section("Userscript") {
@@ -73,6 +79,7 @@ struct SettingsView: View {
             try KeychainManager().save(email: accountEmail, password: accountPassword)
             settings.quickLoginEnabled = true
             accountPassword = ""
+            manager.reconfigureAutofill(reload: true)
             AppLogger.shared.log("EA account saved securely in the iPhone Keychain.")
         } catch {
             AppLogger.shared.log(error.localizedDescription, level: .error)

@@ -33,6 +33,7 @@ final class WebViewManager: NSObject, ObservableObject {
         do { try injector.install(into: controller) }
         catch { report(error, context: "Installing userscript") }
         installConsoleBridge(on: controller)
+        installAutofillScript(on: controller)
 
         webView.navigationDelegate = self
         webView.uiDelegate = self
@@ -66,6 +67,55 @@ final class WebViewManager: NSObject, ObservableObject {
         })();
         """
         controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+    }
+
+    private func installAutofillScript(on controller: WKUserContentController) {
+        guard SettingsManager.shared.quickLoginEnabled,
+              let credentials = KeychainManager().read(),
+              let email = jsonString(credentials.email),
+              let password = jsonString(credentials.password) else { return }
+        controller.addUserScript(WKUserScript(
+            source: Self.autofillSource(email: email, password: password),
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: false,
+            in: .page
+        ))
+    }
+
+    private func jsonString(_ value: String) -> String? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func autofillSource(email: String, password: String) -> String {
+        """
+        (() => {
+          if (!location.hostname.endsWith("ea.com")) return;
+          const savedEmail = \(email), savedPassword = \(password);
+          const setValue = (element, value) => {
+            if (!element || element.value) return;
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+            if (setter) setter.call(element, value); else element.value = value;
+            for (const name of ["input", "change", "blur"]) {
+              element.dispatchEvent(new Event(name, { bubbles: true }));
+            }
+          };
+          const fill = () => {
+            const emailInput = document.querySelector(
+              'input[type="email"],#email,input[name="email"],input[name="username"],input[autocomplete="username"],input[id*="email" i]');
+            const passwordInput = document.querySelector(
+              'input[type="password"],#password,input[name="password"],input[autocomplete="current-password"],input[id*="password" i]');
+            setValue(emailInput, savedEmail);
+            setValue(passwordInput, savedPassword);
+            return Boolean(emailInput?.value && passwordInput?.value);
+          };
+          fill();
+          let attempts = 0;
+          const timer = setInterval(() => {
+            if (fill() || ++attempts >= 120) clearInterval(timer);
+          }, 500);
+        })();
+        """
     }
 
     private func observeWebView() {
@@ -114,8 +164,15 @@ final class WebViewManager: NSObject, ObservableObject {
         do {
             try injector.install(into: webView.configuration.userContentController)
             installConsoleBridge(on: webView.configuration.userContentController)
+            installAutofillScript(on: webView.configuration.userContentController)
             if SettingsManager.shared.scriptInjectionEnabled { injectScript(force: true) }
         } catch { report(error, context: "Updating injection") }
+    }
+
+    func reconfigureAutofill(reload: Bool) {
+        reconfigureInjection()
+        if reload { webView.reload() }
+        else { fillSavedLogin() }
     }
 
     func updateUserscript() async {
@@ -139,33 +196,10 @@ final class WebViewManager: NSObject, ObservableObject {
 
     func fillSavedLogin() {
         guard SettingsManager.shared.quickLoginEnabled,
-              let credentials = KeychainManager().read() else { return }
-        guard let emailData = try? JSONEncoder().encode(credentials.email),
-              let passwordData = try? JSONEncoder().encode(credentials.password),
-              let email = String(data: emailData, encoding: .utf8),
-              let password = String(data: passwordData, encoding: .utf8) else { return }
-        let source = """
-        (() => {
-          const email = (email), password = (password);
-          const setValue = (element, value) => {
-            if (!element || element.value) return false;
-            const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), "value")?.set;
-            if (setter) setter.call(element, value); else element.value = value;
-            element.dispatchEvent(new Event("input", { bubbles: true }));
-            element.dispatchEvent(new Event("change", { bubbles: true }));
-            return true;
-          };
-          const fill = () => {
-            const emailInput = document.querySelector('input[type="email"],input[name="email"],input[name="username"],input[autocomplete="username"]');
-            const passwordInput = document.querySelector('input[type="password"],input[name="password"],input[autocomplete="current-password"]');
-            return setValue(emailInput, email) || setValue(passwordInput, password);
-          };
-          fill();
-          let attempts = 0;
-          const timer = setInterval(() => { if (fill() || ++attempts >= 40) clearInterval(timer); }, 500);
-        })();
-        """
-        webView.evaluateJavaScript(source) { _, error in
+              let credentials = KeychainManager().read(),
+              let email = jsonString(credentials.email),
+              let password = jsonString(credentials.password) else { return }
+        webView.evaluateJavaScript(Self.autofillSource(email: email, password: password)) { _, error in
             if let error { AppLogger.shared.log("iOS account autofill failed: \(error.localizedDescription)", level: .warning) }
             else { AppLogger.shared.log("Saved account fields filled; sign-in was not submitted.") }
         }
