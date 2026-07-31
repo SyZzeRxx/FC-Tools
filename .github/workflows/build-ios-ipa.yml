@@ -18,12 +18,27 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Unpack source archive when uploaded through the web UI
+      - name: Apply Swift concurrency compatibility fixes
         run: |
-          set -euo pipefail
-          if [ -f "FC-Tools-iOS-Source.zip" ]; then
-            /usr/bin/unzip -q -o "FC-Tools-iOS-Source.zip"
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path("FC Tools iOS/FC Tools")
+          settings = root / "Services/SettingsManager.swift"
+          text = settings.read_text()
+          text = text.replace("@MainActor\nfinal class SettingsManager", "final class SettingsManager")
+          settings.write_text(text)
+          cookies = root / "Services/CookieManager.swift"
+          text = cookies.read_text()
+          if "@MainActor\nstruct CookieManager" not in text:
+              text = text.replace("struct CookieManager", "@MainActor\nstruct CookieManager")
+          cookies.write_text(text)
+          injector = root / "Services/ScriptInjector.swift"
+          text = injector.read_text()
+          marker = "    func install(into controller: WKUserContentController) throws"
+          if "    @MainActor\n" + marker not in text:
+              text = text.replace(marker, "    @MainActor\n" + marker)
+          injector.write_text(text)
+          PY
 
       - name: Build iPhone application
         run: |
@@ -38,6 +53,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            SWIFT_VERSION=5.0 \
+            SWIFT_STRICT_CONCURRENCY=minimal \
             clean build
 
       - name: Package unsigned IPA
