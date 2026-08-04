@@ -14,7 +14,7 @@ enum ScriptInjectorError: LocalizedError {
 }
 
 struct ScriptInjector {
-    static let version = "0.1.0"
+    static let version = "0.3.0"
     static let marker = "__fcToolsFodderInjected"
     static let updateURL = URL(string: "https://fodder.gg/fodder.user.js")!
 

@@ -17,6 +17,9 @@ final class WebViewManager: NSObject, ObservableObject {
     let webView: WKWebView
     private let injector = ScriptInjector()
     private var observations = Set<AnyCancellable>()
+    private var authWebView: WKWebView?
+    private var authContainer: UIView?
+    private weak var authAddressLabel: UILabel?
 
     override init() {
         let controller = WKUserContentController()
@@ -25,6 +28,7 @@ final class WebViewManager: NSObject, ObservableObject {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController = controller
         configuration.preferences.isFraudulentWebsiteWarningEnabled = true
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
         configuration.allowsInlineMediaPlayback = true
         webView = WKWebView(frame: .zero, configuration: configuration)
         super.init()
@@ -210,20 +214,143 @@ final class WebViewManager: NSObject, ObservableObject {
         lastError = message
         AppLogger.shared.log(message, level: .error)
     }
+
+    private func presentAuthWebView(configuration: WKWebViewConfiguration) -> WKWebView {
+        closeAuthView()
+
+        let container = UIView(frame: webView.bounds)
+        container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.backgroundColor = UIColor(red: 0.03, green: 0.04, blue: 0.055, alpha: 1)
+
+        let header = UIView(frame: CGRect(x: 0, y: 0, width: container.bounds.width, height: 50))
+        header.autoresizingMask = [.flexibleWidth]
+        header.backgroundColor = UIColor(red: 0.08, green: 0.095, blue: 0.125, alpha: 1)
+
+        let label = UILabel(frame: CGRect(x: 54, y: 0, width: header.bounds.width - 108, height: 50))
+        label.autoresizingMask = [.flexibleWidth]
+        label.text = "Secure sign-in"
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        header.addSubview(label)
+
+        let close = UIButton(type: .system)
+        close.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
+        close.setImage(UIImage(systemName: "xmark"), for: .normal)
+        close.tintColor = .white
+        close.accessibilityLabel = "Cancel sign-in"
+        close.addTarget(self, action: #selector(closeAuthViewFromButton), for: .touchUpInside)
+        header.addSubview(close)
+
+        let popup = WKWebView(
+            frame: CGRect(x: 0, y: 50, width: container.bounds.width, height: container.bounds.height - 50),
+            configuration: configuration
+        )
+        popup.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        popup.navigationDelegate = self
+        popup.uiDelegate = self
+        popup.allowsBackForwardNavigationGestures = true
+        container.addSubview(popup)
+        container.addSubview(header)
+        webView.addSubview(container)
+
+        authContainer = container
+        authWebView = popup
+        authAddressLabel = label
+        AppLogger.shared.log("Opened an in-app account sign-in view.")
+        return popup
+    }
+
+    @objc private func closeAuthViewFromButton() { closeAuthView() }
+
+    private func closeAuthView() {
+        authWebView?.stopLoading()
+        authWebView?.navigationDelegate = nil
+        authWebView?.uiDelegate = nil
+        authWebView?.removeFromSuperview()
+        authContainer?.removeFromSuperview()
+        authWebView = nil
+        authContainer = nil
+        authAddressLabel = nil
+    }
+
+    private func authDisplayName(for url: URL?) -> String {
+        switch url?.host?.lowercased() {
+        case "accounts.google.com": "Google Account"
+        case "discord.com": "Discord"
+        case "fodder.gg": "fodder.gg"
+        case .some(let host): host
+        case nil: "Secure sign-in"
+        }
+    }
+
+    @discardableResult
+    private func completeAuthIfPresent(in url: URL?) -> Bool {
+        guard let url,
+              url.host?.lowercased().hasSuffix("ea.com") == true,
+              let fragment = url.fragment,
+              let components = URLComponents(string: "https://callback.invalid/?\(fragment)"),
+              let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
+              !token.isEmpty,
+              let encoded = jsonString(token) else { return false }
+
+        let source = """
+        (() => {
+          const token = \(encoded);
+          localStorage.setItem("fodder_gg_token", token);
+          if (window.FodderGG?.setAuthToken) window.FodderGG.setAuthToken(token);
+          if (window.FodderGG?.getMe) window.FodderGG.getMe().catch(() => {});
+          return true;
+        })();
+        """
+        webView.evaluateJavaScript(source) { [weak self] value, error in
+            Task { @MainActor in
+                guard let self else { return }
+                if let error {
+                    self.report(error, context: "Completing account sign-in")
+                    return
+                }
+                guard value as? Bool == true else {
+                    self.report(AuthHandoffError.rejected, context: "Completing account sign-in")
+                    return
+                }
+                AppLogger.shared.log("Account sign-in completed and returned to FC Tools.")
+                self.closeAuthView()
+            }
+        }
+        return true
+    }
+}
+
+private enum AuthHandoffError: LocalizedError {
+    case rejected
+    var errorDescription: String? { "The main page rejected the account token." }
 }
 
 extension WebViewManager: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        if webView === authWebView {
+            authAddressLabel?.text = authDisplayName(for: webView.url)
+            return
+        }
         isLoading = true
         lastError = nil
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if webView === authWebView {
+            authAddressLabel?.text = authDisplayName(for: webView.url)
+            if completeAuthIfPresent(in: webView.url) { webView.stopLoading() }
+            return
+        }
         isLoading = false
         webView.scrollView.refreshControl?.endRefreshing()
         injectScript()
         fillSavedLogin()
     }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        if webView === authWebView {
+            AppLogger.shared.log("Account sign-in navigation failed: \(error.localizedDescription)", level: .warning)
+            return
+        }
         isLoading = false
         webView.scrollView.refreshControl?.endRefreshing()
         report(error, context: "Navigation failed")
@@ -232,18 +359,33 @@ extension WebViewManager: WKNavigationDelegate {
         self.webView(webView, didFail: navigation, withError: error)
     }
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if webView === authWebView {
+            AppLogger.shared.log("Account sign-in view closed unexpectedly.", level: .warning)
+            closeAuthView()
+            return
+        }
         AppLogger.shared.log("Web content process terminated; recovering.", level: .warning)
         webView.reload()
+    }
+
+    func webView(_ webView: WKWebView,
+                 decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        guard webView === authWebView else { return .allow }
+        authAddressLabel?.text = authDisplayName(for: navigationAction.request.url)
+        return completeAuthIfPresent(in: navigationAction.request.url) ? .cancel : .allow
     }
 }
 
 extension WebViewManager: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-        if navigationAction.targetFrame == nil, let url = navigationAction.request.url {
-            webView.load(URLRequest(url: url))
-        }
-        return nil
+        guard navigationAction.targetFrame == nil, webView === self.webView else { return nil }
+        return presentAuthWebView(configuration: configuration)
+    }
+
+
+    func webViewDidClose(_ webView: WKWebView) {
+        if webView === authWebView { closeAuthView() }
     }
 }
 

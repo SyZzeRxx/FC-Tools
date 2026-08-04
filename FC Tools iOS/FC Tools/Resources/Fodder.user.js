@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Fodder — SBC tools for FC 26
 // @namespace    https://fodder.gg
-// @version      0.1.0
+// @version      0.3.0
 // @description  Solve SBCs from your live club, inside the FC 26 web app. fodder.gg
 // @match        https://www.ea.com/*
 // @run-at       document-idle
@@ -18,7 +18,26 @@
 // fetch (default-src *) and the eval (script-src 'unsafe-eval').
 (async () => {
   const BACKEND = window.FODDER_GG_BACKEND || "https://fodder.gg";
+
+  // Sign-in hand-off. Runs BEFORE the wait for EA's app below, deliberately: the token arrives in the fragment
+  // of a tab our client opened, and it must be captured even when EA serves something the app never boots on
+  // (a login wall, an error page). The tab that opened this one shares our origin, so writing localStorage IS
+  // the delivery — it reads the value and finishes signing in.
+  //
+  // The fragment is stripped immediately so the token does not sit in the address bar, the back/forward history
+  // or anything that later reads location.hash. It is never sent to a server: browsers do not transmit fragments.
+  try {
+    const h = String(location.hash || "");
+    const m = h.match(/(?:^#|&)token=([^&]+)/);
+    if (m) {
+      // Must match AUTH_TOKEN_KEY in client/src/core.js — the whole point is that the client reads it back.
+      localStorage.setItem("fodder_gg_token", decodeURIComponent(m[1]));
+      history.replaceState(null, "", location.pathname + location.search);
+    }
+  } catch (_e) { /* a blocked localStorage just means the pairing fallback handles it */ }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Locales with a dictionary on the CDN. Baked in so an unknown UT_LOCALE costs no 404 round trip.
+  const LANGS = ["fr", "es", "pt", "ko", "zh"];
 
   // The SPA boots asynchronously after document-idle — wait for its globals so the client's hooks
   // bind against a ready app. Give up quietly after ~60s (login page, error page, …).
@@ -29,10 +48,28 @@
   }
   if (!ready) return;
 
+  // /client.core.js ships English only; the user's own language is a separate ~5KB JSON. Both fetches
+  // run CONCURRENTLY and the overlay is assigned BEFORE the eval, so the client reads a populated
+  // window.__fodderI18n and its fgT() stays synchronous — no async init, no string briefly rendering
+  // in English, nothing re-rendered afterwards. A failed overlay simply leaves the user on English.
+  const localeOverlay = async () => {
+    try {
+      const raw = (localStorage.getItem("UT_LOCALE") || "").toLowerCase().split(/[-_]/)[0];
+      if (!LANGS.includes(raw)) return null;
+      const res = await fetch(BACKEND + "/i18n/" + raw + ".json", { cache: "no-store" });
+      if (!res.ok) return null;
+      return { lang: raw, dict: await res.json() };
+    } catch (_e) { return null; }
+  };
+
   try {
-    const src = await (await fetch(BACKEND + "/client.js", { cache: "no-store" })).text();
+    const [src, overlay] = await Promise.all([
+      fetch(BACKEND + "/client.core.js", { cache: "no-store" }).then((r) => r.text()),
+      localeOverlay(),
+    ]);
+    if (overlay) window.__fodderI18n = Object.assign(window.__fodderI18n || {}, { [overlay.lang]: overlay.dict });
     (0, eval)(src);
-    console.log("[fodder-gg] userscript injected from " + BACKEND);
+    console.log("[fodder-gg] userscript injected from " + BACKEND + (overlay ? " (+" + overlay.lang + ")" : ""));
   } catch (e) {
     console.warn("[fodder-gg] userscript load failed — " + BACKEND + " unreachable?", e);
   }
