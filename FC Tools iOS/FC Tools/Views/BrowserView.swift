@@ -43,7 +43,7 @@ struct BrowserView: View {
             }
         }
         .background(.black)
-        .statusBarHidden(true)
+        .statusBarHidden(false)
         .sheet(isPresented: $showingSettings) {
             SettingsView(manager: manager)
         }
