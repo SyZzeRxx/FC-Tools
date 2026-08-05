@@ -42,7 +42,10 @@ final class WebViewManager: NSObject, ObservableObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
-        webView.allowsBackForwardNavigationGestures = true
+        // Horizontal edge swipes are easy to trigger while using the FC interface and
+        // can unexpectedly return to an old EA login page. Navigation remains available
+        // through the explicit Back/Forward controls in Settings.
+        webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.refreshControl = makeRefreshControl()
         observeWebView()
         scriptVersion = injector.version()
@@ -248,7 +251,7 @@ final class WebViewManager: NSObject, ObservableObject {
         popup.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         popup.navigationDelegate = self
         popup.uiDelegate = self
-        popup.allowsBackForwardNavigationGestures = true
+        popup.allowsBackForwardNavigationGestures = false
         container.addSubview(popup)
         container.addSubview(header)
         webView.addSubview(container)

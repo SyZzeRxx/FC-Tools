@@ -43,6 +43,15 @@ struct SettingsView: View {
                     }.disabled(!settings.scriptInjectionEnabled)
                 }
                 Section("Browser") {
+                    HStack {
+                        Button("Back", systemImage: "chevron.left") { manager.goBack() }
+                            .disabled(!manager.canGoBack)
+                        Spacer()
+                        Button("Forward", systemImage: "chevron.right") { manager.goForward() }
+                            .disabled(!manager.canGoForward)
+                        Spacer()
+                        Button("Refresh", systemImage: "arrow.clockwise") { manager.reload() }
+                    }
                     Button("Console logs", systemImage: "terminal") { showingLogs = true }
                     Button("Clear cookies and cache", systemImage: "trash", role: .destructive) {
                         confirmClear = true
